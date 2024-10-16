@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apollos ML Solutions</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f4f8;
+            color: #333;
+            overflow-y: auto;
+        }
+
+        header {
+            background-color: #283593;
+            color: #fff;
+            padding: 20px;
+            text-align: center;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 2.5rem;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 1200px;
+            margin: 20px auto;
+        }
+
+        .content-box {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .listbox-section, .ml-section {
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+        }
+
+        .listbox {
+            flex: 1;
+            margin-right: 100px;
+        }
+
+        select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        .button {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #283593;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-align: center;
+            margin: 10px 0;
+        }
+
+        .button:hover {
+            background-color: #3f51b5;
+        }
+
+        .graph-box {
+            margin-top: 0px;
+        }
+
+        footer {
+            background-color: #283593;
+            color: #fff;
+            text-align: center;
+            padding: 10px 0;
+            position: relative; 
+            width: 100%;
+            margin-top: 20px; 
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Apollos ML Solutions</h1>
+        <p>Exploring whether a correlation exists between proton density and large earthquakes</p>
+    </header>
+
+    <div class="container">
+        <div class="content-box listbox-section">
+            <div class="listbox">
+                <h2>Select Date Range</h2>
+                <button class="button" onclick="displayGraph()">Show Graph</button>
+                <select id="dateList" size="10">
+                </select>
+            </div>
+
+            <div class="graph-box">
+                <h2>Proton Density and Earthquake Data</h2>
+                <h5>NOTE: Selected date will appear as the 5th bar in the graph.</h5>
+                <div id="barGraph">
+                    <img id="graph-image" alt="Graph will be displayed here" style="max-width:100%;"/>
+                </div>
+            </div>
+        </div>
+
+        
+        <div class="content-box ml-section">
+            <h2>Run the Machine Learning Model</h2>
+            <p>Click the button to run the logistic regression model and view the classification report:</p>
+            <button class="button" onclick="runModel()">Run Model</button>
+
+            <div id="mlResults">
+                
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>© 2024 Apollos ML Solutions. All rights reserved.</p>
+    </footer>
+
+    <script>
+        function populateDateList() {
+            fetch('/get_dates')
+            .then(response => response.json())
+            .then(data => {
+                const dateList = document.getElementById('dateList');
+                dateList.innerHTML = '';
+
+                data.forEach(item => {
+                    const option = document.createElement('option');
+                    option.text = `${item.Date} - Np_max: ${item.Np_max}`;
+                    dateList.add(option);
+                });
+            })
+            .catch(error => console.error('Error fetching date data:', error));
+        }
+
+        window.onload = populateDateList;
+
+        function displayGraph() {
+            console.log("Button clicked, displayGraph triggered"); // Debugging log
+
+            const dateList = document.getElementById('dateList');
+            const selectedOption = dateList.options[dateList.selectedIndex];
+
+            if (!selectedOption) {
+                alert("Please select a date.");
+                return;
+            }
+
+            const selectedDate = selectedOption.text;
+
+            // Debug log for the selected date
+            console.log("Selected date:", selectedDate);
+
+            // Send the selected date to the backend using a JSON object
+            fetch('/plot_graph', { 
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json' // Make sure to set Content-Type to JSON
+                },
+                body: JSON.stringify({ selected_date: selectedDate }) // Convert the JS object to JSON
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json(); // Parse the response as JSON
+            })
+            .then(data => {
+                if (data.img_path) {
+                    console.log("Image path:", data.img_path); // Debug log
+                    // Cache-busting: append a timestamp to ensure a fresh image
+                    const timestamp = new Date().getTime();
+                    const imageUrl = `${data.img_path}?t=${timestamp}`;
+                    document.getElementById('graph-image').src = imageUrl; // Set the image source
+                } else {
+                    console.error("Error in backend response:", data);
+                    alert('Error generating graph');
+                }
+            })
+            .catch(error => console.error('Error fetching graph:', error));
+        }
+
+        function runModel() {
+            const mlResults = document.getElementById('mlResults');
+            mlResults.innerHTML = '<p>Running the model, please wait...</p>';
+
+            // Fetch the results from the backend
+            fetch('/run_model')
+                .then(response => response.json())
+                .then(data => {
+                    // Display the Classification Report header
+                    let reportHtml = '<h3>Classification Report</h3>';
+                    reportHtml += '<h5>Accuracy score must be over .85 to show a correlation.</h5>';
+
+                    // Display the model accuracy
+                    reportHtml += `<p><strong>Model Accuracy:</strong> ${data.accuracy.toFixed(2)}</p>`;
+
+                    // Build the classification report table
+                    reportHtml += '<table border="1" cellpadding="10" cellspacing="0">';
+                    reportHtml += '<thead><tr><th>Label</th><th>Precision</th><th>Recall</th><th>F1-Score</th><th>Support</th></tr></thead>';
+                    reportHtml += '<tbody>';
+
+                    // Loop through the classification report data
+                    for (const label in data.report) {
+                        if (data.report.hasOwnProperty(label) && typeof data.report[label] === 'object') {
+                            reportHtml += `<tr>
+                                <td>${label}</td>
+                                <td>${data.report[label].precision.toFixed(2)}</td>
+                                <td>${data.report[label].recall.toFixed(2)}</td>
+                                <td>${data.report[label]["f1-score"].toFixed(2)}</td>
+                                <td>${data.report[label].support}</td>
+                            </tr>`;
+                        }
+                    }
+
+                    reportHtml += '</tbody></table>';
+                    mlResults.innerHTML = reportHtml;
+                })
+                .catch(error => {
+                    console.error('Error running the model:', error);
+                    mlResults.innerHTML = '<p>Error running the model. Please try again later.</p>';
+                });
+        }
+
+
+
+    </script>
+</body>
+</html>
